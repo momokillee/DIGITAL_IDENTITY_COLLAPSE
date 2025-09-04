@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Signup & Login — Digital Credentials (OTP)</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{ --bg:#f4f7fb; --card:#ffffff; --accent:#2563eb; --muted:#6b7280; --radius:12px }
+  *{box-sizing:border-box;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial;}
+  body{margin:0;background:linear-gradient(180deg,#eef2ff 0%,var(--bg)100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:18px}
+  .wrap{width:100%;max-width:980px;display:grid;grid-template-columns:1fr 440px;gap:24px;align-items:start}
+  .panel{background:var(--card);padding:22px;border-radius:var(--radius);box-shadow:0 10px 30px rgba(2,6,23,0.06)}
+  .hero h1{margin:0;font-size:22px}
+  .muted{color:var(--muted);font-size:14px}
+  .field{margin-top:12px}
+  label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+  input,textarea,select{width:100%;padding:10px 12px;border-radius:10px;border:1px solid #e7eefc;background:#fff;font-size:14px}
+  textarea{min-height:80px}
+  button{width:100%;padding:12px;border-radius:12px;border:none;background:var(--accent);color:#fff;font-weight:600;cursor:pointer}
+  button.ghost{background:transparent;border:1px solid #e6eefc;color:var(--accent)}
+  .small{font-size:13px;color:var(--muted)}
+  .cred-list{margin:10px 0;padding:0;list-style:none}
+  .cred-item{padding:10px;border-radius:10px;border:1px solid #f0f6ff;background:#fbfdff;display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .flex{display:flex;gap:10px}
+  .col{flex:1}
+  .status{margin-top:12px;font-size:13px;color:var(--muted)}
+  .ok{color:green}
+  .err{color:#b91c1c}
+  @media (max-width:900px){ .wrap{grid-template-columns:1fr} }
+</style>
+
+<!-- Firebase client SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <div class="panel hero">
+    <h1>Digital Credentials — Signup & Login</h1>
+    <p class="muted">Signup includes OTP verification and credential entry. Login uses password + OTP. If email sending isn't configured, OTPs are printed to backend logs for testing.</p>
+
+    <div style="height:14px"></div>
+
+    <div class="panel">
+      <h3>Status</h3>
+      <div id="info" class="status">Ready</div>
+    </div>
+  </div>
+
+  <div class="panel" id="auth-panel">
+    <h3 id="panel-title">Sign Up</h3>
+
+    <!-- SIGNUP -->
+    <div id="signup-block">
+      <div class="field">
+        <label>Email</label>
+        <input id="signup-email" type="email" placeholder="you@example.com" />
+      </div>
+
+      <div class="field">
+        <label>Password</label>
+        <input id="signup-password" type="password" placeholder="Choose a strong password" />
+      </div>
+
+      <hr style="margin:12px 0" />
+
+      <strong>Credential (example)</strong>
+      <div class="field">
+        <label>Type</label>
+        <input id="cred-type" placeholder="StudentID / Membership" />
+      </div>
+      <div class="field">
+        <label>Issuer</label>
+        <input id="cred-issuer" placeholder="University / Company" />
+      </div>
+      <div class="flex">
+        <div class="col field">
+          <label>Issue Date</label>
+          <input id="cred-issue" type="date" />
+        </div>
+        <div class="col field">
+          <label>Expiry Date</label>
+          <input id="cred-expiry" type="date" />
+        </div>
+      </div>
+      <div class="field">
+        <label>Description</label>
+        <input id="cred-desc" placeholder="Optional notes" />
+      </div>
+
+      <div class="field" style="margin-top:14px">
+        <button id="signup-btn" onclick="startSignup()">Create account & send OTP</button>
+      </div>
+
+      <div id="signup-otp-block" style="display:none;margin-top:10px">
+        <div class="field">
+          <label>Enter Signup OTP</label>
+          <input id="signup-otp" placeholder="Enter OTP from email" />
+        </div>
+        <div class="field">
+          <button id="signup-verify-btn" onclick="verifySignupOtp()">Verify Signup OTP</button>
+        </div>
+      </div>
+
+      <p class="small" style="margin-top:8px">Already have an account? <a href="#" onclick="showLogin()">Login</a></p>
+    </div>
+
+    <!-- LOGIN -->
+    <div id="login-block" style="display:none">
+      <div class="field">
+        <label>Email</label>
+        <input id="login-email" type="email" placeholder="you@example.com" />
+      </div>
+
+      <div class="field">
+        <label>Password</label>
+        <input id="login-password" type="password" placeholder="Your password" />
+      </div>
+
+      <div class="field">
+        <button id="login-btn" onclick="doClientSignIn()">Sign in (password) & request OTP</button>
+      </div>
+
+      <div id="login-otp-block" style="display:none">
+        <div class="field">
+          <label>Enter Login OTP</label>
+          <input id="login-otp" placeholder="Enter OTP" />
+        </div>
+        <div class="field">
+          <button id="login-verify-btn" onclick="verifyLoginOtp()">Verify Login OTP</button>
+        </div>
+      </div>
+
+      <p class="small" style="margin-top:8px">Don't have an account? <a href="#" onclick="showSignup()">Sign up</a></p>
+    </div>
+
+    <!-- After login -->
+    <div id="after-login" style="display:none;margin-top:12px">
+      <h4>Your credentials</h4>
+      <ul id="credList" class="cred-list"></ul>
+      <div class="field">
+        <button class="ghost" onclick="signOut()">Sign out</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* ===== CONFIG — update with your Firebase project config ===== */
+const firebaseConfig = {
+  apiKey: "AIzaSyAEEXs-W1mYdSEpO3b_NwyHNv4il7LlUBA",
+  authDomain: "digital-identity-913e0.firebaseapp.com",
+  projectId: "digital-identity-913e0",
+};
+/* ============================================================ */
+
+firebase.initializeApp(firebaseConfig);
+
+const apiBase = "http://localhost:5000"; // change if your backend runs elsewhere
+const infoEl = document.getElementById("info");
+let lastIdToken = null;
+let currentUid = null;
+
+/* UI helpers */
+function setInfo(msg, ok = true) {
+  infoEl.innerText = msg;
+  infoEl.className = ok ? "status ok" : "status err";
+  console.log("INFO:", msg);
+}
+function disable(...els) { els.forEach(id => document.getElementById(id).disabled = true); }
+function enable(...els) { els.forEach(id => document.getElementById(id).disabled = false); }
+
+/* UI switches */
+function showLogin() {
+  document.getElementById("signup-block").style.display = "none";
+  document.getElementById("login-block").style.display = "block";
+  document.getElementById("panel-title").innerText = "Login";
+}
+function showSignup() {
+  document.getElementById("signup-block").style.display = "block";
+  document.getElementById("login-block").style.display = "none";
+  document.getElementById("panel-title").innerText = "Sign Up";
+}
+
+/* ===== Signup flow =====
+  1. create user with Firebase client
+  2. get ID token and send to backend /api/signup_start (with credentials)
+  3. backend stores pending_signups and emails OTP
+  4. user enters OTP -> frontend calls /api/verify_signup_otp (email+otp)
+*/
+async function startSignup() {
+  const email = document.getElementById("signup-email").value.trim();
+  const password = document.getElementById("signup-password").value;
+  if (!email || !password) { setInfo("Email & password required.", false); return; }
+
+  const credObj = {
+    type: document.getElementById("cred-type").value.trim(),
+    issuer: document.getElementById("cred-issuer").value.trim(),
+    issue_date: document.getElementById("cred-issue").value,
+    expiry_date: document.getElementById("cred-expiry").value,
+    description: document.getElementById("cred-desc").value.trim()
+  };
+
+  setInfo("Creating account on Firebase...");
+  disable("signup-btn");
+
+  try {
+    const userCred = await firebase.auth().createUserWithEmailAndPassword(email, password);
+    currentUid = userCred.user.uid;
+    const idToken = await userCred.user.getIdToken(true);
+    lastIdToken = idToken;
+
+    setInfo("Account created. Requesting signup OTP from backend...");
+    const res = await fetch(`${apiBase}/api/signup_start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id_token: idToken, email, credentials: [credObj] })
+    });
+    const data = await res.json();
+    if (res.ok && data.status === "success") {
+      setInfo("Signup OTP sent. Check email (or backend console). Enter OTP below.");
+      document.getElementById("signup-otp-block").style.display = "block";
+    } else {
+      setInfo("Failed to start signup: " + (data.message || res.statusText), false);
+      enable("signup-btn");
+      console.error("signup_start failed:", data);
+    }
+  } catch (err) {
+    console.error("startSignup error:", err);
+    setInfo("Signup failed: " + (err.message || err), false);
+    enable("signup-btn");
+  }
+}
+
+async function verifySignupOtp() {
+  const email = document.getElementById("signup-email").value.trim();
+  const otp = document.getElementById("signup-otp").value.trim();
+  if (!email || !otp) { setInfo("Email and OTP required.", false); return; }
+
+  setInfo("Verifying signup OTP...");
+  try {
+    const res = await fetch(`${apiBase}/api/verify_signup_otp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, otp })
+    });
+    const data = await res.json();
+    if (res.ok && data.status === "success") {
+      setInfo("Signup verified — credentials stored. You can now login.");
+      document.getElementById("signup-otp-block").style.display = "none";
+      enable("signup-btn");
+      showLogin();
+    } else {
+      setInfo("OTP verify failed: " + (data.message || res.statusText), false);
+      console.error("verify_signup_otp failed:", data);
+    }
+  } catch (err) {
+    console.error("verifySignupOtp error:", err);
+    setInfo("Error verifying signup OTP: " + (err.message || err), false);
+  }
+}
+
+/* ===== Login flow =====
+  1. sign in with Firebase client (password)
+  2. get ID token and call backend /api/login to send OTP
+  3. user enters OTP -> call /api/verify_otp (email+otp)
+*/
+async function doClientSignIn() {
+  const email = document.getElementById("login-email").value.trim();
+  const password = document.getElementById("login-password").value;
+  if (!email || !password) { setInfo("Email & password required.", false); return; }
+
+  setInfo("Signing in with Firebase...");
+  disable("login-btn");
+  try {
+    const userCred = await firebase.auth().signInWithEmailAndPassword(email, password);
+    currentUid = userCred.user.uid;
+    const idToken = await userCred.user.getIdToken(true);
+    lastIdToken = idToken;
+
+    // request OTP from backend
+    setInfo("Requesting login OTP from backend...");
+    const res = await fetch(`${apiBase}/api/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id_token: idToken })
+    });
+    const data = await res.json();
+    if (res.ok && data.status === "success") {
+      setInfo("Login OTP sent. Enter OTP below.");
+      document.getElementById("login-otp-block").style.display = "block";
+    } else {
+      setInfo("Failed to request login OTP: " + (data.message || res.statusText), false);
+      console.error("login request failed:", data);
+      enable("login-btn");
+    }
+  } catch (err) {
+    console.error("doClientSignIn error:", err);
+    setInfo("Sign-in failed: " + (err.message || err), false);
+
+    // report failed sign-in to backend (so user gets alert)
+    try {
+      await fetch(`${apiBase}/api/report_failed_login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, error_code: err.code || "client_error", message: err.message || String(err) })
+      });
+    } catch (reportErr) {
+      console.warn("report_failed_login failed:", reportErr);
+    }
+    enable("login-btn");
+  }
+}
+
+async function verifyLoginOtp() {
+  const email = document.getElementById("login-email").value.trim();
+  const otp = document.getElementById("login-otp").value.trim();
+  if (!email || !otp) { setInfo("Email & OTP required.", false); return; }
+
+  setInfo("Verifying login OTP...");
+  try {
+    const res = await fetch(`${apiBase}/api/verify_otp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, otp })
+    });
+    const data = await res.json();
+    if (res.ok && data.status === "success") {
+      setInfo("Login successful! Fetching credentials...");
+      document.getElementById("login-otp-block").style.display = "none";
+      enable("login-btn");
+      await loadCredentialsForCurrentUser();
+    } else {
+      setInfo("OTP verify failed: " + (data.message || res.statusText), false);
+      console.error("verify_otp failed:", data);
+    }
+  } catch (err) {
+    console.error("verifyLoginOtp error:", err);
+    setInfo("Error verifying login OTP: " + (err.message || err), false);
+  }
+}
+
+/* ===== After login: fetch credentials from backend ===== */
+async function loadCredentialsForCurrentUser() {
+  if (!currentUid) {
+    setInfo("No user ID available to fetch credentials.", false);
+    return;
+  }
+  setInfo("Loading credentials from backend...");
+  try {
+    const res = await fetch(`${apiBase}/api/get_credentials/${currentUid}`);
+    const data = await res.json();
+    if (res.ok && data.status === "success") {
+      const list = document.getElementById("credList");
+      list.innerHTML = "";
+      if (!data.credentials || data.credentials.length === 0) {
+        list.innerHTML = "<li class='small muted'>No credentials found.</li>";
+      } else {
+        data.credentials.forEach(c => {
+          const li = document.createElement("li");
+          li.className = "cred-item";
+          li.innerHTML = `<div><strong>${c.type}</strong><div class="small">${c.issuer} • ${c.issue_date || ''} → ${c.expiry_date || ''}</div></div>
+                          <div class="small">${c.credential_id || ''}</div>`;
+          list.appendChild(li);
+        });
+      }
+      document.getElementById("after-login").style.display = "block";
+      setInfo("Credentials loaded.", true);
+    } else {
+      setInfo("Failed to load credentials: " + (data.message || res.statusText), false);
+      console.error("get_credentials failed:", data);
+    }
+  } catch (err) {
+    console.error("loadCredentials error:", err);
+    setInfo("Error loading credentials: " + (err.message || err), false);
+  }
+}
+
+/* ===== Sign out helper ===== */
+async function signOut() {
+  try {
+    await firebase.auth().signOut();
+    currentUid = null;
+    lastIdToken = null;
+    document.getElementById("after-login").style.display = "none";
+    showLogin();
+    setInfo("Signed out.");
+  } catch (err) {
+    console.error("signOut error:", err);
+    setInfo("Sign out failed: " + (err.message || err), false);
+  }
+}
+
+/* Optional: preserve auth state across reloads */
+firebase.auth().onAuthStateChanged(user => {
+  if (user) {
+    currentUid = user.uid;
+    setInfo("User signed in (client). UID: " + currentUid);
+  } else {
+    setInfo("No client-signed-in user.");
+  }
+});
+</script>
+</body>
+</html>
