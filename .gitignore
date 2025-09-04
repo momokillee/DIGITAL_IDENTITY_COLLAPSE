@@ -1,0 +1,13 @@
+# Ignore environment files
+.env
+*.env
+
+# Ignore Python cache (if using Python)
+__pycache__/
+*.pyc
+
+# Ignore node modules (if using Node.js)
+node_modules/
+
+# Ignore OS files
+.DS_Store
